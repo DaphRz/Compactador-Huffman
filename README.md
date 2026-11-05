@@ -1,6 +1,6 @@
 # Compactador de Huffman
 
-Compactador de arquivos de texto com **Huffman canônico**, combinado com **LZ77 (variante LZSS)**, com interface gráfica em **Streamlit**.
+Compactador de arquivos de texto com **Huffman Canônico**, combinado com **LZ77 (variante LZSS)**, com interface gráfica em **Streamlit**.
 
 ## Como executar
 
@@ -88,7 +88,7 @@ As duas técnicas atacam problemas diferentes e se complementam:
 
 Por isso a interface tem a chave **"Usar LZ77 antes do Huffman"** e a aba de comparação mostra o ganho dos dois modos lado a lado.
 
-### Por que Huffman canônico?
+### Por que Huffman Canônico?
 Com códigos canônicos o cabeçalho só precisa guardar o **comprimento** do código de cada símbolo (2 bytes por símbolo), em vez da tabela de frequências ou da árvore inteira. O descompactador regenera exatamente os mesmos códigos a partir dos comprimentos. A taxa de compressão é idêntica à do Huffman clássico e o cabeçalho fica menor, o que pesa em arquivos pequenos.
 
 ---
