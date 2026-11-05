@@ -2,7 +2,7 @@
 
 Compactador de arquivos de texto com **Huffman Canônico**, combinado com **LZ77 (variante LZSS)**, com interface gráfica em **Streamlit**.
 
-## Como executar
+## Como executar - colocar passo a passo Windows UVV
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
