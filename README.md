@@ -98,18 +98,18 @@ Com códigos canônicos o cabeçalho só precisa guardar o **comprimento** do c�
 ```
  texto.huf
       ▼
- 1. Ler e validar o cabeçalho                  formato.py
+ 1. Ler e validar o cabeçalho                                  formato.py
       │   (assinatura, flags, tamanhos, padding, comprimentos)
       ▼
- 2. Regenerar os códigos canônicos             huffman.py
+ 2. Regenerar os códigos canônicos                             huffman.py
       ▼
- 3. Reconstruir a árvore (trie binária)        huffman.py
+ 3. Reconstruir a árvore (trie binária)                        huffman.py
       ▼
- 4. Decodificar os bits                        huffman.py + bitio.py
+ 4. Decodificar os bits                                        huffman.py + bitio.py
       │   (desce na árvore: 0 = esquerda, 1 = direita; ao chegar numa
       │    folha emite o símbolo e volta à raiz; o padding é ignorado)
       ▼
- 5. Desfazer o LZ77 (se a flag estiver ligada) lz77.py
+ 5. Desfazer o LZ77 (se a flag estiver ligada)                 lz77.py
       ▼
  texto restaurado  (idêntico ao original)
 ```
