@@ -13,8 +13,8 @@ streamlit run app.py
 Plano B (linha de comando) e testes:
 
 ```bash
-python cli.py compactar texto.txt texto.huf            # Huffman + LZ77
-python cli.py compactar texto.txt texto.huf --sem-lz77 # só Huffman
+python cli.py compactar texto.txt texto.huf             # Huffman + LZ77
+python cli.py compactar texto.txt texto.huf --sem-lz77  # só Huffman
 python cli.py descompactar texto.huf restaurado.txt
 python -m unittest discover -s tests -v
 ```
