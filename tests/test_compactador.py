@@ -18,9 +18,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import compactador  # noqa: E402
-import formato  # noqa: E402
-import huffman  # noqa: E402
-import lz77  # noqa: E402
+import formato      # noqa: E402
+import huffman      # noqa: E402
+import lz77         # noqa: E402
 from bitio import EscritorDeBits, LeitorDeBits  # noqa: E402
 
 TEXTO_PT = (
@@ -40,6 +40,7 @@ CASOS: dict[str, bytes] = {
 
 
 class TestBitIO(unittest.TestCase):
+
     def test_escrever_e_ler(self) -> None:
         escritor = EscritorDeBits()
         escritor.escrever_bits("101")
@@ -55,6 +56,7 @@ class TestBitIO(unittest.TestCase):
 
 
 class TestHuffman(unittest.TestCase):
+
     def test_frequencias(self) -> None:
         self.assertEqual(huffman.contar_frequencias(b"aab"), {97: 2, 98: 1})
 
@@ -84,6 +86,7 @@ class TestHuffman(unittest.TestCase):
 
 
 class TestLZ77(unittest.TestCase):
+
     def test_ida_e_volta_tokens(self) -> None:
         for nome, dados in CASOS.items():
             with self.subTest(nome):
@@ -97,6 +100,7 @@ class TestLZ77(unittest.TestCase):
 
 
 class TestFormato(unittest.TestCase):
+
     def test_cabecalho_ida_e_volta(self) -> None:
         cab = formato.Cabecalho(True, 1234, 999, 3, {97: 2, 98: 3, 10: 5})
         dados = formato.serializar_cabecalho(cab)
@@ -115,6 +119,7 @@ class TestFormato(unittest.TestCase):
 
 
 class TestPipeline(unittest.TestCase):
+    
     def test_ida_e_volta(self) -> None:
         for usar_lz77 in (False, True):
             for nome, dados in CASOS.items():
