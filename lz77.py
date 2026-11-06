@@ -99,11 +99,37 @@ def comprimir(dados: bytes) -> list[Token]:
     Returns:
         Lista de tokens. Para ``dados`` vazio, ``[]``.
     """
-    # TODO: implementar usando um índice ``dict[bytes, deque[int]]`` que mapeia
-    # cada trinca de bytes (dados[i:i+3]) para as posições em que ela apareceu.
-    # Isso evita comparar com a janela inteira (busca ingênua O(n * janela)).
-    # Use deque(maxlen=MAX_CANDIDATOS) para limitar a memória.
-    pass
+    # Índice ``dict[bytes, deque[int]]``: cada trinca de bytes (dados[i:i+3])
+    # aponta para as posições em que ela apareceu. Isso evita comparar com a
+    # janela inteira (busca ingênua O(n * janela)). O deque(maxlen=...) limita
+    # a memória e o número de candidatos testados.
+    tokens: list[Token] = []
+    indice: dict[bytes, deque[int]] = {}
+    tamanho = len(dados)
+    ultima_indexavel = tamanho - COMPRIMENTO_MINIMO  # última posição com trinca completa
+
+    def registrar(i: int) -> None:
+        if i <= ultima_indexavel:
+            trinca = dados[i:i + COMPRIMENTO_MINIMO]
+            posicoes = indice.get(trinca)
+            if posicoes is None:
+                posicoes = deque(maxlen=MAX_CANDIDATOS)
+                indice[trinca] = posicoes
+            posicoes.append(i)
+
+    posicao = 0
+    while posicao < tamanho:
+        distancia, comprimento = _maior_correspondencia(dados, posicao, indice)
+        if comprimento >= COMPRIMENTO_MINIMO:
+            tokens.append(TokenReferencia(distancia, comprimento))
+            for i in range(posicao, posicao + comprimento):
+                registrar(i)
+            posicao += comprimento
+        else:
+            tokens.append(TokenLiteral(dados[posicao]))
+            registrar(posicao)
+            posicao += 1
+    return tokens
 
 
 def _maior_correspondencia(
@@ -121,13 +147,28 @@ def _maior_correspondencia(
     Returns:
         Tupla ``(distancia, comprimento)``. Se nada for encontrado, ``(0, 0)``.
     """
-    # TODO:
-    #   1. trinca = dados[posicao:posicao + 3]; se não estiver no índice -> (0, 0)
-    #   2. para cada candidato (do mais recente para o mais antigo):
-    #        ignorar se posicao - candidato > TAMANHO_JANELA
-    #        contar quantos bytes coincidem (até COMPRIMENTO_MAXIMO e até o fim dos dados)
-    #        guardar o melhor; se atingir COMPRIMENTO_MAXIMO, pode parar
-    pass
+    candidatos = indice.get(dados[posicao:posicao + COMPRIMENTO_MINIMO])
+    if not candidatos:
+        return 0, 0
+
+    limite = min(COMPRIMENTO_MAXIMO, len(dados) - posicao)
+    melhor_distancia, melhor_comprimento = 0, 0
+
+    # Do mais recente para o mais antigo: em caso de empate fica a menor distância.
+    for candidato in reversed(candidatos):
+        distancia = posicao - candidato
+        if distancia > TAMANHO_JANELA:
+            break  # os demais são ainda mais antigos, também fora da janela
+        # A trinca já coincide; continuar a partir do 4º byte.
+        comprimento = COMPRIMENTO_MINIMO
+        while comprimento < limite and dados[candidato + comprimento] == dados[posicao + comprimento]:
+            comprimento += 1
+        if comprimento > melhor_comprimento:
+            melhor_distancia, melhor_comprimento = distancia, comprimento
+            if comprimento == limite:
+                break
+
+    return melhor_distancia, melhor_comprimento
 
 
 def descomprimir(tokens: Iterable[Token]) -> bytes:
@@ -142,11 +183,24 @@ def descomprimir(tokens: Iterable[Token]) -> bytes:
     Raises:
         ValueError: se uma referência apontar para antes do início dos dados.
     """
-    # TODO: usar um bytearray ``saida``:
-    #   literal    -> saida.append(byte)
-    #   referência -> copiar BYTE A BYTE: saida.append(saida[-distancia])
-    #                 ``comprimento`` vezes (byte a byte para suportar sobreposição)
-    pass
+    saida = bytearray()
+    for token in tokens:
+        if isinstance(token, TokenLiteral):
+            saida.append(token.byte)
+        else:
+            distancia, comprimento = token.distancia, token.comprimento
+            if distancia <= 0 or distancia > len(saida):
+                raise ValueError(
+                    f"referência inválida: distância {distancia} com apenas {len(saida)} bytes gerados"
+                )
+            if comprimento <= distancia:
+                inicio = len(saida) - distancia
+                saida += saida[inicio:inicio + comprimento]
+            else:
+                # Sobreposição (ex.: "aaaaaa"): copiar byte a byte.
+                for _ in range(comprimento):
+                    saida.append(saida[-distancia])
+    return bytes(saida)
 
 
 def serializar(tokens: list[Token]) -> bytes:
@@ -158,10 +212,26 @@ def serializar(tokens: list[Token]) -> bytes:
     Returns:
         Bytes prontos para serem comprimidos pelo Huffman.
     """
-    # TODO: processar os tokens em grupos de 8:
-    #   flags = 0; para o i-ésimo token do grupo, se for referência: flags |= 1 << i
-    #   escrever o byte de flags e, em seguida, os bytes de cada token.
-    pass
+    saida = bytearray()
+    for inicio in range(0, len(tokens), 8):
+        grupo = tokens[inicio:inicio + 8]
+        flags = 0
+        corpo = bytearray()
+        for i, token in enumerate(grupo):
+            if isinstance(token, TokenReferencia):
+                if not 1 <= token.distancia <= TAMANHO_JANELA:
+                    raise ValueError(f"distância fora de 1..{TAMANHO_JANELA}: {token.distancia}")
+                if not COMPRIMENTO_MINIMO <= token.comprimento <= COMPRIMENTO_MAXIMO:
+                    raise ValueError(f"comprimento fora de {COMPRIMENTO_MINIMO}..{COMPRIMENTO_MAXIMO}: {token.comprimento}")
+                flags |= 1 << i
+                valor = (token.distancia << 4) | (token.comprimento - COMPRIMENTO_MINIMO)
+                corpo.append(valor >> 8)
+                corpo.append(valor & 0xFF)
+            else:
+                corpo.append(token.byte)
+        saida.append(flags)
+        saida += corpo
+    return bytes(saida)
 
 
 def desserializar(dados: bytes) -> list[Token]:
@@ -176,7 +246,28 @@ def desserializar(dados: bytes) -> list[Token]:
     Raises:
         ValueError: se os dados terminarem no meio de um token.
     """
-    # TODO: ler um byte de flags e, para cada um dos 8 bits (enquanto houver
-    # dados), ler 1 byte (literal) ou 2 bytes (referência).
-    # Cuidado: o último grupo pode ter menos de 8 tokens.
-    pass
+    tokens: list[Token] = []
+    posicao = 0
+    tamanho = len(dados)
+    while posicao < tamanho:
+        flags = dados[posicao]
+        posicao += 1
+        # O último grupo pode ter menos de 8 tokens: para quando os dados acabam.
+        for i in range(8):
+            if posicao >= tamanho:
+                if flags >> i:
+                    raise ValueError("dados terminaram antes de uma referência indicada nas flags")
+                break
+            if flags & (1 << i):
+                if posicao + 2 > tamanho:
+                    raise ValueError("dados terminaram no meio de uma referência")
+                valor = (dados[posicao] << 8) | dados[posicao + 1]
+                posicao += 2
+                distancia = valor >> 4
+                if distancia == 0:
+                    raise ValueError("referência com distância 0")
+                tokens.append(TokenReferencia(distancia, (valor & 0x0F) + COMPRIMENTO_MINIMO))
+            else:
+                tokens.append(TokenLiteral(dados[posicao]))
+                posicao += 1
+    return tokens

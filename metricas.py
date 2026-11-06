@@ -22,6 +22,8 @@ a entropia de ordem 0 não enxerga.
 
 from __future__ import annotations
 
+import math
+
 from huffman import Codigos, Frequencias
 
 
@@ -35,8 +37,9 @@ def taxa_de_compressao(tamanho_original: int, tamanho_compactado: int) -> float:
     Returns:
         A razão (ex.: 0.42). Retorna 0.0 se ``tamanho_original`` for 0.
     """
-    # TODO: tratar divisão por zero.
-    pass
+    if tamanho_original == 0:
+        return 0.0
+    return tamanho_compactado / tamanho_original
 
 
 def percentual_de_reducao(tamanho_original: int, tamanho_compactado: int) -> float:
@@ -46,8 +49,9 @@ def percentual_de_reducao(tamanho_original: int, tamanho_compactado: int) -> flo
         ``(1 - taxa) * 100``. Pode ser negativa se o "compactado" ficou maior
         (acontece com arquivos muito pequenos por causa do cabeçalho).
     """
-    # TODO: reutilizar taxa_de_compressao.
-    pass
+    if tamanho_original == 0:
+        return 0.0
+    return (1.0 - taxa_de_compressao(tamanho_original, tamanho_compactado)) * 100.0
 
 
 def fator_de_compressao(tamanho_original: int, tamanho_compactado: int) -> float:
@@ -56,8 +60,9 @@ def fator_de_compressao(tamanho_original: int, tamanho_compactado: int) -> float
     Returns:
         O fator; 0.0 se ``tamanho_compactado`` for 0.
     """
-    # TODO
-    pass
+    if tamanho_compactado == 0:
+        return 0.0
+    return tamanho_original / tamanho_compactado
 
 
 def bits_por_caractere(tamanho_original: int, tamanho_compactado: int) -> float:
@@ -66,8 +71,9 @@ def bits_por_caractere(tamanho_original: int, tamanho_compactado: int) -> float:
     Returns:
         ``8 * tamanho_compactado / tamanho_original``; 0.0 se o original for vazio.
     """
-    # TODO
-    pass
+    if tamanho_original == 0:
+        return 0.0
+    return 8 * tamanho_compactado / tamanho_original
 
 
 def entropia(frequencias: Frequencias) -> float:
@@ -79,8 +85,15 @@ def entropia(frequencias: Frequencias) -> float:
     Returns:
         ``-Σ p · log2(p)``; 0.0 para um dicionário vazio ou com um único símbolo.
     """
-    # TODO: total = soma das frequências; p = f / total; usar math.log2.
-    pass
+    total = sum(frequencias.values())
+    if total == 0 or len(frequencias) <= 1:
+        return 0.0
+    h = 0.0
+    for f in frequencias.values():
+        if f > 0:
+            p = f / total
+            h -= p * math.log2(p)
+    return h
 
 
 def comprimento_medio(frequencias: Frequencias, codigos: Codigos) -> float:
@@ -93,8 +106,11 @@ def comprimento_medio(frequencias: Frequencias, codigos: Codigos) -> float:
     Returns:
         ``Σ f(s) · len(código(s)) / Σ f(s)``; 0.0 se vazio.
     """
-    # TODO
-    pass
+    total = sum(frequencias.values())
+    if total == 0:
+        return 0.0
+    soma = sum(f * len(codigos[s]) for s, f in frequencias.items())
+    return soma / total
 
 
 def eficiencia(entropia_bits: float, comprimento_medio_bits: float) -> float:
@@ -104,5 +120,6 @@ def eficiencia(entropia_bits: float, comprimento_medio_bits: float) -> float:
         Valor entre 0 e 1 (1 = código ótimo). Retorna 1.0 se o comprimento
         médio for 0.
     """
-    # TODO
-    pass
+    if comprimento_medio_bits == 0:
+        return 1.0
+    return entropia_bits / comprimento_medio_bits

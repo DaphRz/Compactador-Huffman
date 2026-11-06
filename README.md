@@ -2,7 +2,31 @@
 
 Compactador de arquivos de texto com **Huffman Canônico**, combinado com **LZ77 (variante LZSS)**, com interface gráfica em **Streamlit**.
 
-## Como executar - colocar passo a passo Windows UVV
+## Como executar
+
+Requisito: **Python 3.11 ou mais recente**.
+
+### Windows 
+
+
+   ```bat
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   py -m venv .venv
+   .venv\Scripts\Activate.ps1
+   python -m pip install -r requirements.txt
+   python -m streamlit run app.py
+   ```
+Plano B (linha de comando) e testes :
+
+```bat
+python cli.py compactar texto.txt texto.huf
+python cli.py compactar texto.txt texto.huf --sem-lz77
+python cli.py descompactar texto.huf restaurado.txt
+fc /b texto.txt restaurado.txt
+python -m unittest discover -s tests -v
+```
+
+### Linux / macOS
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -16,6 +40,7 @@ Plano B (linha de comando) e testes:
 python cli.py compactar texto.txt texto.huf             # Huffman + LZ77
 python cli.py compactar texto.txt texto.huf --sem-lz77  # só Huffman
 python cli.py descompactar texto.huf restaurado.txt
+cmp texto.txt restaurado.txt && echo "idênticos"
 python -m unittest discover -s tests -v
 ```
 
@@ -120,7 +145,9 @@ Orquestrado por `compactador.descompactar()`. A interface confere o resultado by
 
 ## 4. O que cada arquivo faz
 
-### Núcleo (a implementar, hoje esqueletos com docstrings e `TODO`)
+### Núcleo
+
+Implementados: `bitio.py`, `lz77.py`, `formato.py`, `compactador.py` e `metricas.py`. **Pendente:** `huffman.py`, que ainda é um esqueleto com docstrings e `TODO`. Enquanto ele não for implementado, a interface abre, mas compactar e descompactar não funcionam.
 
 | Arquivo | Responsabilidade | Principais funções/classes |
 |---|---|---|

@@ -67,8 +67,7 @@ class Cabecalho:
         Returns:
             ``TAMANHO_FIXO + 2 * len(comprimentos)``.
         """
-        # TODO: retornar o cálculo acima.
-        pass
+        return TAMANHO_FIXO + 2 * len(self.comprimentos)
 
 
 def serializar_cabecalho(cabecalho: Cabecalho) -> bytes:
@@ -80,12 +79,32 @@ def serializar_cabecalho(cabecalho: Cabecalho) -> bytes:
     Returns:
         Os bytes do cabeçalho.
     """
-    # TODO:
-    #   1. flags = FLAG_LZ77 se usa_lz77 senão 0
-    #   2. parte fixa: struct.pack(FORMATO_FIXO, MAGICA, flags, ..., len(comprimentos))
-    #   3. pares: para cada símbolo em ordem crescente, bytes((simbolo, comprimento))
-    #   4. concatenar e retornar
-    pass
+    if not 0 <= cabecalho.bits_padding <= 7:
+        raise ValueError(f"bits_padding inválido: {cabecalho.bits_padding}")
+    if len(cabecalho.comprimentos) > 256:
+        raise ValueError("a tabela não pode ter mais de 256 símbolos")
+
+    flags = FLAG_LZ77 if cabecalho.usa_lz77 else 0
+    parte_fixa = struct.pack(
+        FORMATO_FIXO,
+        MAGICA,
+        flags,
+        cabecalho.tamanho_original,
+        cabecalho.quantidade_simbolos,
+        cabecalho.bits_padding,
+        len(cabecalho.comprimentos),
+    )
+
+    pares = bytearray()
+    for simbolo in sorted(cabecalho.comprimentos):
+        comprimento = cabecalho.comprimentos[simbolo]
+        if not 0 <= simbolo <= 255:
+            raise ValueError(f"símbolo fora de 0..255: {simbolo}")
+        if not 1 <= comprimento <= 255:
+            raise ValueError(f"comprimento de código fora de 1..255: {comprimento}")
+        pares += bytes((simbolo, comprimento))
+
+    return parte_fixa + bytes(pares)
 
 
 def ler_cabecalho(arquivo: bytes) -> tuple[Cabecalho, int]:
@@ -103,10 +122,45 @@ def ler_cabecalho(arquivo: bytes) -> tuple[Cabecalho, int]:
             assinatura não for ``MAGICA``, se ``bits_padding > 7``, se a tabela
             estiver truncada ou se algum comprimento for 0.
     """
-    # TODO:
-    #   1. validar len(arquivo) >= TAMANHO_FIXO
-    #   2. struct.unpack_from(FORMATO_FIXO, arquivo, 0)
-    #   3. validar MAGICA e bits_padding
-    #   4. ler os n pares a partir de TAMANHO_FIXO
-    #   5. retornar (Cabecalho(...), TAMANHO_FIXO + 2 * n)
-    pass
+    if len(arquivo) < TAMANHO_FIXO:
+        raise FormatoInvalidoError(
+            f"arquivo muito pequeno ({len(arquivo)} bytes); "
+            f"o cabeçalho ocupa pelo menos {TAMANHO_FIXO} bytes"
+        )
+
+    magica, flags, tamanho_original, quantidade_simbolos, bits_padding, n = (
+        struct.unpack_from(FORMATO_FIXO, arquivo, 0)
+    )
+
+    if magica != MAGICA:
+        raise FormatoInvalidoError(f"assinatura inválida: {magica!r} (esperado {MAGICA!r})")
+    if bits_padding > 7:
+        raise FormatoInvalidoError(f"bits_padding inválido: {bits_padding} (esperado 0..7)")
+    if n > 256:
+        raise FormatoInvalidoError(f"tabela com {n} símbolos (máximo 256)")
+
+    inicio_payload = TAMANHO_FIXO + 2 * n
+    if len(arquivo) < inicio_payload:
+        raise FormatoInvalidoError("tabela de comprimentos truncada")
+
+    comprimentos: dict[int, int] = {}
+    for i in range(n):
+        simbolo = arquivo[TAMANHO_FIXO + 2 * i]
+        comprimento = arquivo[TAMANHO_FIXO + 2 * i + 1]
+        if comprimento == 0:
+            raise FormatoInvalidoError(f"comprimento 0 para o símbolo {simbolo}")
+        if simbolo in comprimentos:
+            raise FormatoInvalidoError(f"símbolo {simbolo} repetido na tabela")
+        comprimentos[simbolo] = comprimento
+
+    if quantidade_simbolos > 0 and n == 0:
+        raise FormatoInvalidoError("há símbolos a decodificar, mas a tabela está vazia")
+
+    cabecalho = Cabecalho(
+        usa_lz77=bool(flags & FLAG_LZ77),
+        tamanho_original=tamanho_original,
+        quantidade_simbolos=quantidade_simbolos,
+        bits_padding=bits_padding,
+        comprimentos=comprimentos,
+    )
+    return cabecalho, inicio_payload

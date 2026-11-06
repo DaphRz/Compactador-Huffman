@@ -16,10 +16,14 @@ este módulo, nunca diretamente com os outros.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from formato import Cabecalho
+import formato
+import huffman
+import lz77
+from formato import Cabecalho, FormatoInvalidoError
 from huffman import Codigos, Frequencias, NoHuffman
 
 
@@ -89,20 +93,59 @@ def compactar(dados: bytes, usar_lz77: bool = True) -> ResultadoCompressao:
     Returns:
         Um ``ResultadoCompressao`` completo.
     """
-    # TODO:
-    #   1. inicio = time.perf_counter()
-    #   2. entrada = dados, ou lz77.serializar(lz77.comprimir(dados)) se usar_lz77
-    #      (guarde len(tokens) e quantas são TokenReferencia)
-    #   3. frequencias = huffman.contar_frequencias(entrada)
-    #   4. arvore_inicial = huffman.construir_arvore(frequencias)
-    #   5. comprimentos = huffman.comprimentos_dos_codigos(huffman.gerar_codigos(arvore_inicial))
-    #   6. codigos = huffman.gerar_codigos_canonicos(comprimentos)
-    #   7. payload, padding = huffman.codificar(entrada, codigos)
-    #   8. cabecalho = Cabecalho(usar_lz77, len(dados), len(entrada), padding, comprimentos)
-    #   9. arquivo = formato.serializar_cabecalho(cabecalho) + payload
-    #  10. arvore = huffman.reconstruir_arvore(codigos, frequencias)  (para exibir)
-    #  11. montar e retornar ResultadoCompressao
-    pass
+    inicio = time.perf_counter()
+    dados = bytes(dados)
+
+    # 1. LZ77 (opcional)
+    quantidade_tokens: int | None = None
+    quantidade_referencias: int | None = None
+    if usar_lz77:
+        tokens = lz77.comprimir(dados)
+        quantidade_tokens = len(tokens)
+        quantidade_referencias = sum(1 for t in tokens if isinstance(t, lz77.TokenReferencia))
+        entrada = lz77.serializar(tokens)
+    else:
+        entrada = dados
+
+    # 2-4. Frequências -> árvore -> comprimentos -> códigos canônicos
+    frequencias = huffman.contar_frequencias(entrada)
+    arvore_inicial = huffman.construir_arvore(frequencias)
+    comprimentos = huffman.comprimentos_dos_codigos(huffman.gerar_codigos(arvore_inicial))
+    codigos = huffman.gerar_codigos_canonicos(comprimentos)
+
+    # 5. Codificação
+    payload, padding = huffman.codificar(entrada, codigos)
+
+    # 6. Cabeçalho + payload
+    cabecalho = Cabecalho(
+        usa_lz77=usar_lz77,
+        tamanho_original=len(dados),
+        quantidade_simbolos=len(entrada),
+        bits_padding=padding,
+        comprimentos=comprimentos,
+    )
+    bytes_cabecalho = formato.serializar_cabecalho(cabecalho)
+    arquivo = bytes_cabecalho + payload
+
+    # Árvore que corresponde exatamente aos códigos gravados (para exibição).
+    arvore = huffman.reconstruir_arvore(codigos, frequencias)
+
+    return ResultadoCompressao(
+        arquivo=arquivo,
+        cabecalho=cabecalho,
+        usa_lz77=usar_lz77,
+        tamanho_original=len(dados),
+        tamanho_entrada_huffman=len(entrada),
+        tamanho_cabecalho=len(bytes_cabecalho),
+        tamanho_payload=len(payload),
+        tamanho_compactado=len(arquivo),
+        frequencias=frequencias,
+        codigos=codigos,
+        arvore=arvore,
+        quantidade_tokens_lz77=quantidade_tokens,
+        quantidade_referencias_lz77=quantidade_referencias,
+        tempo_segundos=time.perf_counter() - inicio,
+    )
 
 
 def descompactar(arquivo: bytes) -> ResultadoDescompressao:
@@ -117,18 +160,53 @@ def descompactar(arquivo: bytes) -> ResultadoDescompressao:
     Raises:
         formato.FormatoInvalidoError: se o arquivo for inválido ou corrompido.
     """
-    # TODO:
-    #   1. cabecalho, inicio = formato.ler_cabecalho(arquivo)
-    #   2. codigos = huffman.gerar_codigos_canonicos(cabecalho.comprimentos)
-    #   3. raiz = huffman.reconstruir_arvore(codigos)
-    #   4. intermediario = huffman.decodificar(arquivo[inicio:], cabecalho.bits_padding,
-    #                                          raiz, cabecalho.quantidade_simbolos)
-    #   5. se cabecalho.usa_lz77:
-    #          dados = lz77.descomprimir(lz77.desserializar(intermediario))
-    #   6. validar len(dados) == cabecalho.tamanho_original
-    #      (senão FormatoInvalidoError)
-    #   7. retornar ResultadoDescompressao
-    pass
+    inicio_tempo = time.perf_counter()
+    arquivo = bytes(arquivo)
+
+    # 1. Cabeçalho (já lança FormatoInvalidoError se estiver inválido)
+    cabecalho, inicio = formato.ler_cabecalho(arquivo)
+    payload = arquivo[inicio:]
+
+    if not payload and cabecalho.bits_padding:
+        raise FormatoInvalidoError("padding informado, mas o payload está vazio")
+
+    try:
+        # 2-3. Códigos canônicos -> árvore de decodificação
+        codigos = huffman.gerar_codigos_canonicos(cabecalho.comprimentos)
+        raiz = huffman.reconstruir_arvore(codigos)
+
+        # 4. Decodificar os bits
+        intermediario = huffman.decodificar(
+            payload, cabecalho.bits_padding, raiz, cabecalho.quantidade_simbolos
+        )
+        if len(intermediario) != cabecalho.quantidade_simbolos:
+            raise FormatoInvalidoError(
+                f"esperados {cabecalho.quantidade_simbolos} símbolos, "
+                f"decodificados {len(intermediario)}"
+            )
+
+        # 5. Desfazer o LZ77
+        if cabecalho.usa_lz77:
+            dados = lz77.descomprimir(lz77.desserializar(intermediario))
+        else:
+            dados = intermediario
+    except FormatoInvalidoError:
+        raise
+    except (ValueError, IndexError, KeyError) as erro:
+        raise FormatoInvalidoError(f"arquivo corrompido: {erro}") from erro
+
+    # 6. Conferir o tamanho final
+    if len(dados) != cabecalho.tamanho_original:
+        raise FormatoInvalidoError(
+            f"tamanho restaurado ({len(dados)} bytes) difere do original "
+            f"registrado no cabeçalho ({cabecalho.tamanho_original} bytes)"
+        )
+
+    return ResultadoDescompressao(
+        dados=bytes(dados),
+        cabecalho=cabecalho,
+        tempo_segundos=time.perf_counter() - inicio_tempo,
+    )
 
 
 def compactar_arquivo(
@@ -146,8 +224,10 @@ def compactar_arquivo(
     Returns:
         O ``ResultadoCompressao``.
     """
-    # TODO: Path(caminho_entrada).read_bytes() -> compactar -> Path(caminho_saida).write_bytes(...)
-    pass
+    dados = Path(caminho_entrada).read_bytes()
+    resultado = compactar(dados, usar_lz77=usar_lz77)
+    Path(caminho_saida).write_bytes(resultado.arquivo)
+    return resultado
 
 
 def descompactar_arquivo(
@@ -163,5 +243,7 @@ def descompactar_arquivo(
     Returns:
         O ``ResultadoDescompressao``.
     """
-    # TODO: Path(...).read_bytes() -> descompactar -> Path(...).write_bytes(resultado.dados)
-    pass
+    arquivo = Path(caminho_entrada).read_bytes()
+    resultado = descompactar(arquivo)
+    Path(caminho_saida).write_bytes(resultado.dados)
+    return resultado
