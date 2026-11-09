@@ -28,6 +28,8 @@ Regra do trabalho: este módulo deve ser implementado à mão. ``heapq`` e
 
 from __future__ import annotations
 
+import heapq
+from collections import Counter
 from dataclasses import dataclass
 
 # Tipos auxiliares (apenas para deixar as assinaturas mais legíveis).
@@ -65,16 +67,14 @@ class NoHuffman:
 
     def eh_folha(self) -> bool:
         """Retorna ``True`` se o nó for uma folha (não tem filhos)."""
-        # TODO: retornar True quando esquerda e direita forem None.
-        pass
+        return self.esquerda is None and self.direita is None
 
     def __lt__(self, outro: NoHuffman) -> bool:
         """Comparação usada pelo ``heapq`` para ordenar os nós.
 
         Critério: menor frequência primeiro; em caso de empate, menor ``ordem``.
         """
-        # TODO: comparar a tupla (self.frequencia, self.ordem) com a do outro nó.
-        pass
+        return (self.frequencia, self.ordem) < (outro.frequencia, outro.ordem)
 
 
 def contar_frequencias(dados: bytes) -> Frequencias:
@@ -87,8 +87,8 @@ def contar_frequencias(dados: bytes) -> Frequencias:
         Dicionário ``{byte: quantidade}`` contendo apenas os bytes que aparecem.
         Para ``dados`` vazio, retorna ``{}``.
     """
-    # TODO: percorrer os bytes e contar (pode usar collections.Counter).
-    pass
+    # Counter sobre bytes itera inteiros (0..255) e é implementado em C: rápido.
+    return dict(Counter(dados))
 
 
 def construir_arvore(frequencias: Frequencias) -> NoHuffman | None:
@@ -112,10 +112,35 @@ def construir_arvore(frequencias: Frequencias) -> NoHuffman | None:
     Returns:
         A raiz da árvore, ou ``None`` se não houver símbolos.
     """
-    # TODO: implementar com heapq (heappush / heappop) e um contador para ``ordem``.
-    # Dica: insira as folhas em ordem crescente de símbolo para o resultado
-    # ser determinístico.
-    pass
+    if not frequencias:
+        return None
+
+    # Folhas em ordem crescente de símbolo: o desempate fica determinístico.
+    contador = 0
+    heap: list[NoHuffman] = []
+    for simbolo in sorted(frequencias):
+        heap.append(NoHuffman(frequencias[simbolo], simbolo=simbolo, ordem=contador))
+        contador += 1
+    heapq.heapify(heap)
+
+    # Caso especial: um único símbolo -> raiz interna com só o filho esquerdo.
+    if len(heap) == 1:
+        folha = heap[0]
+        return NoHuffman(folha.frequencia, esquerda=folha, ordem=contador)
+
+    while len(heap) > 1:
+        menor = heapq.heappop(heap)    # vai para a esquerda (bit 0)
+        segundo = heapq.heappop(heap)  # vai para a direita (bit 1)
+        pai = NoHuffman(
+            menor.frequencia + segundo.frequencia,
+            esquerda=menor,
+            direita=segundo,
+            ordem=contador,
+        )
+        contador += 1
+        heapq.heappush(heap, pai)
+
+    return heap[0]
 
 
 def gerar_codigos(raiz: NoHuffman | None) -> Codigos:
@@ -128,9 +153,23 @@ def gerar_codigos(raiz: NoHuffman | None) -> Codigos:
         Dicionário ``{símbolo: código}``, ex.: ``{97: "0", 98: "10", 99: "11"}``.
         Retorna ``{}`` se ``raiz`` for ``None``.
     """
-    # TODO: busca em profundidade (recursiva ou com pilha), acumulando o
-    # caminho: esquerda -> '0', direita -> '1'. Ao chegar numa folha, salvar.
-    pass
+    codigos: Codigos = {}
+    if raiz is None:
+        return codigos
+
+    # Pilha explícita (evita estourar a recursão em árvores muito profundas).
+    pilha: list[tuple[NoHuffman, str]] = [(raiz, "")]
+    while pilha:
+        no, caminho = pilha.pop()
+        if no.eh_folha():
+            # Raiz que já é folha (não deve ocorrer): garante código de 1 bit.
+            codigos[no.simbolo] = caminho or "0"  # type: ignore[index]
+            continue
+        if no.direita is not None:
+            pilha.append((no.direita, caminho + "1"))
+        if no.esquerda is not None:
+            pilha.append((no.esquerda, caminho + "0"))
+    return codigos
 
 
 def comprimentos_dos_codigos(codigos: Codigos) -> Comprimentos:
@@ -142,8 +181,7 @@ def comprimentos_dos_codigos(codigos: Codigos) -> Comprimentos:
     Returns:
         Dicionário ``{símbolo: len(código)}``.
     """
-    # TODO: uma linha com dict comprehension.
-    pass
+    return {simbolo: len(codigo) for simbolo, codigo in codigos.items()}
 
 
 def gerar_codigos_canonicos(comprimentos: Comprimentos) -> Codigos:
@@ -167,8 +205,20 @@ def gerar_codigos_canonicos(comprimentos: Comprimentos) -> Codigos:
     Returns:
         Dicionário ``{símbolo: código canônico}``.
     """
-    # TODO: implementar o algoritmo acima.
-    pass
+    codigos: Codigos = {}
+    codigo = 0
+    comprimento_anterior = 0
+
+    for simbolo, comprimento in sorted(comprimentos.items(), key=lambda par: (par[1], par[0])):
+        if comprimento <= 0:
+            raise ValueError(f"comprimento inválido para o símbolo {simbolo}: {comprimento}")
+        if codigos:  # a partir do segundo símbolo
+            codigo += 1
+            codigo <<= comprimento - comprimento_anterior  # 0 se o comprimento não mudou
+        codigos[simbolo] = format(codigo, f"0{comprimento}b")
+        comprimento_anterior = comprimento
+
+    return codigos
 
 
 def reconstruir_arvore(
@@ -190,13 +240,37 @@ def reconstruir_arvore(
     Returns:
         A raiz da árvore, ou ``None`` se ``codigos`` estiver vazio.
     """
-    # TODO:
-    #   1. criar a raiz
-    #   2. para cada (símbolo, código): descer a partir da raiz criando nós
-    #      ('0' -> esquerda, '1' -> direita); no último bit criar a folha
-    #   3. se ``frequencias`` foi dado, preencher as frequências dos nós
-    #      internos com um percurso pós-ordem (filhos antes do pai)
-    pass
+    if not codigos:
+        return None
+
+    raiz = NoHuffman(0)
+    for simbolo, codigo in codigos.items():
+        no = raiz
+        for bit in codigo:
+            if bit == "0":
+                if no.esquerda is None:
+                    no.esquerda = NoHuffman(0)
+                no = no.esquerda
+            else:
+                if no.direita is None:
+                    no.direita = NoHuffman(0)
+                no = no.direita
+        no.simbolo = simbolo  # o último nó do caminho é a folha
+
+    if frequencias is not None:
+        # Pós-ordem: os filhos são calculados antes do pai.
+        def preencher(no: NoHuffman) -> int:
+            if no.eh_folha():
+                no.frequencia = frequencias.get(no.simbolo, 0)  # type: ignore[arg-type]
+            else:
+                no.frequencia = sum(
+                    preencher(filho) for filho in (no.esquerda, no.direita) if filho is not None
+                )
+            return no.frequencia
+
+        preencher(raiz)
+
+    return raiz
 
 
 def codificar(dados: bytes, codigos: Codigos) -> tuple[bytes, int]:
@@ -209,9 +283,18 @@ def codificar(dados: bytes, codigos: Codigos) -> tuple[bytes, int]:
     Returns:
         Tupla ``(bytes_empacotados, bits_padding)``.
     """
-    # TODO: usar bitio.EscritorDeBits (ou a otimização com "".join + int(...,2),
-    # descrita em bitio.EscritorDeBits.escrever_bits).
-    pass
+    if not dados:
+        return b"", 0
+
+    # Junta todos os códigos numa única string de '0'/'1' (rápido, feito em C).
+    bits = "".join(map(codigos.__getitem__, dados))
+
+    # Completa com zeros até um múltiplo de 8 (padding).
+    padding = (-len(bits)) % 8
+    bits += "0" * padding
+
+    # Converte a string inteira de uma vez: MSB primeiro, igual ao bitio.py.
+    return int(bits, 2).to_bytes(len(bits) // 8, "big"), padding
 
 
 def decodificar(
@@ -239,6 +322,31 @@ def decodificar(
         ValueError: se os bits terminarem antes do esperado ou levarem a um
             caminho inexistente na árvore (arquivo corrompido).
     """
-    # TODO: usar bitio.LeitorDeBits e um bytearray de saída.
-    # Caso especial: raiz None e quantidade_simbolos == 0 -> retornar b"".
-    pass
+    if quantidade_simbolos == 0:
+        return b""
+    if raiz is None:
+        raise ValueError("árvore vazia, mas há símbolos a decodificar")
+    if not dados:
+        raise ValueError("sem dados para decodificar")
+    if not 0 <= bits_padding <= 7:
+        raise ValueError(f"bits de padding inválido: {bits_padding}")
+
+    # Bytes -> string de bits (MSB primeiro) e descarta o padding do final.
+    bits = bin(int.from_bytes(dados, "big"))[2:].zfill(len(dados) * 8)
+    if bits_padding:
+        bits = bits[:-bits_padding]
+
+    saida = bytearray()
+    no = raiz
+    for bit in bits:
+        proximo = no.esquerda if bit == "0" else no.direita
+        if proximo is None:
+            raise ValueError("sequência de bits inválida (arquivo corrompido)")
+        no = proximo
+        if no.eh_folha():
+            saida.append(no.simbolo)  # type: ignore[arg-type]
+            if len(saida) == quantidade_simbolos:
+                return bytes(saida)
+            no = raiz
+
+    raise ValueError("os bits terminaram antes de decodificar todos os símbolos")
