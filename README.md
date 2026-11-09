@@ -16,13 +16,9 @@ Requisito: **Python 3.11 ou mais recente**.
    python -m pip install -r requirements.txt
    python -m streamlit run app.py
    ```
-Plano B (linha de comando) e testes :
+Testes:
 
 ```bat
-python cli.py compactar texto.txt texto.huf
-python cli.py compactar texto.txt texto.huf --sem-lz77
-python cli.py descompactar texto.huf restaurado.txt
-fc /b texto.txt restaurado.txt
 python -m unittest discover -s tests -v
 ```
 
@@ -34,13 +30,9 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Plano B (linha de comando) e testes:
+Testes:
 
 ```bash
-python cli.py compactar texto.txt texto.huf             # Huffman + LZ77
-python cli.py compactar texto.txt texto.huf --sem-lz77  # só Huffman
-python cli.py descompactar texto.huf restaurado.txt
-cmp texto.txt restaurado.txt && echo "idênticos"
 python -m unittest discover -s tests -v
 ```
 
@@ -56,7 +48,7 @@ python -m unittest discover -s tests -v
 | **d** | Mostrar a árvore de Huffman montada | `huffman.construir_arvore()` + `visualizacao.arvore_para_dot()` | 🌳 Árvore de Huffman (desenho + tabela de códigos) |
 | **e** | Mostrar e **explicar** a taxa de compactação | `metricas.py` | 📊 Taxa de compactação (números, gráfico e explicação em texto) |
 | **f** | Combinar Huffman com outra técnica (ex.: LZ77) | `lz77.py` (liga/desliga na barra lateral) | ⚖️ Huffman × Huffman + LZ77 (compara os dois modos) |
-| **g** | Arquivo padrão fornecido no dia da apresentação | pipeline inteiro, com atenção a velocidade (ver seção 6) | qualquer aba; `cli.py` como plano B |
+| **g** | Arquivo padrão fornecido no dia da apresentação | pipeline inteiro, com atenção a velocidade (ver seção 6) | qualquer aba |
 
 ---
 
@@ -90,9 +82,9 @@ python -m unittest discover -s tests -v
  └─────────────────────────────────────────────────────────────┘
       ▼
  ┌─────────────────────────────────────────────────────────────┐
- │ 5. Codificar                       huffman.py + bitio.py    │
+ │ 5. Codificar                                   huffman.py   │
  │    cada byte vira seu código; os bits são empacotados em    │
- │    bytes (com padding no final)                             │
+ │    bytes (com padding no final, como descrito em bitio.py)  │
  └─────────────────────────────────────────────────────────────┘
       ▼
  ┌─────────────────────────────────────────────────────────────┐
@@ -130,7 +122,7 @@ Com códigos canônicos o cabeçalho só precisa guardar o **comprimento** do c�
       ▼
  3. Reconstruir a árvore (trie binária)                        huffman.py
       ▼
- 4. Decodificar os bits                                        huffman.py + bitio.py
+ 4. Decodificar os bits                                        huffman.py
       │   (desce na árvore: 0 = esquerda, 1 = direita; ao chegar numa
       │    folha emite o símbolo e volta à raiz; o padding é ignorado)
       ▼
@@ -147,11 +139,11 @@ Orquestrado por `compactador.descompactar()`. A interface confere o resultado by
 
 ### Núcleo
 
-Implementados: `bitio.py`, `lz77.py`, `formato.py`, `compactador.py` e `metricas.py`. **Pendente:** `huffman.py`, que ainda é um esqueleto com docstrings e `TODO`. Enquanto ele não for implementado, a interface abre, mas compactar e descompactar não funcionam.
+Todos os módulos do núcleo estão implementados e cobertos pelos testes em `tests/`.
 
 | Arquivo | Responsabilidade | Principais funções/classes |
 |---|---|---|
-| `bitio.py` | **Ponte entre bits e bytes.** Huffman gera códigos de tamanho variável (`0`, `101`, `1100`), mas um arquivo só guarda bytes inteiros. O escritor agrupa os bits de 8 em 8 e completa o último byte com zeros (*padding*); o leitor devolve os bits um a um ignorando o padding. | `EscritorDeBits`, `LeitorDeBits` |
+| `bitio.py` | **Ponte entre bits e bytes** (versão didática, bit a bit; o pipeline usa em `huffman.py` uma conversão em bloco, bem mais rápida, com o mesmo formato: MSB primeiro e padding de zeros no fim). Huffman gera códigos de tamanho variável (`0`, `101`, `1100`), mas um arquivo só guarda bytes inteiros. O escritor agrupa os bits de 8 em 8 e completa o último byte com zeros (*padding*); o leitor devolve os bits um a um ignorando o padding. | `EscritorDeBits`, `LeitorDeBits` |
 | `huffman.py` | **O algoritmo de Huffman.** Frequências, árvore (min-heap), códigos, códigos canônicos, codificação e decodificação. | `NoHuffman`, `contar_frequencias`, `construir_arvore`, `gerar_codigos`, `gerar_codigos_canonicos`, `reconstruir_arvore`, `codificar`, `decodificar` |
 | `lz77.py` | **Segunda técnica (LZSS).** Troca repetições por referências `(distância, comprimento)` e serializa os tokens em bytes para o Huffman comprimir. | `comprimir`, `descomprimir`, `serializar`, `desserializar`, `TokenLiteral`, `TokenReferencia` |
 | `formato.py` | **Layout do arquivo `.huf`.** Grava e lê o cabeçalho, validando assinatura e tamanhos. | `Cabecalho`, `serializar_cabecalho`, `ler_cabecalho`, `FormatoInvalidoError` |
@@ -164,17 +156,16 @@ Implementados: `bitio.py`, `lz77.py`, `formato.py`, `compactador.py` e `metricas
 |---|---|
 | `app.py` | Interface Streamlit com as 6 abas. |
 | `visualizacao.py` | Só **exibição**: árvore em Graphviz, hexdump, bits, tabela de códigos. Não comprime nada. |
-| `cli.py` | Mesma funcionalidade pela linha de comando (plano B na apresentação). |
 | `tests/test_compactador.py` | Testes de ida e volta e casos de borda (vazio, um único símbolo, acentos, arquivo corrompido). |
 | `requirements.txt` | Dependências (apenas Streamlit). |
 
 ### Quem chama quem
 
 ```
-app.py / cli.py
+app.py
     └── compactador.py
           ├── lz77.py
-          ├── huffman.py ── bitio.py
+          ├── huffman.py
           ├── formato.py
           └── (métricas em metricas.py, exibição em visualizacao.py)
 ```
@@ -226,17 +217,4 @@ O arquivo padrão será a métrica de sucesso, então:
 - **Correção primeiro:** compactar → descompactar → texto idêntico. A aba Descompactar confere byte a byte; envie o `.txt` original no campo de conferência.
 - **Velocidade:** escrever bit a bit em Python é lento. Em `huffman.codificar`, junte os códigos em uma string só (`"".join(...)`) e converta de uma vez com `int(bits, 2).to_bytes(...)`. No LZ77, use o índice por trinca de bytes (já descrito em `lz77.py`) em vez de comparar com a janela inteira.
 - **Casos de borda:** arquivo vazio, um único símbolo distinto (o código precisa ter 1 bit) e acentos (trabalha-se em bytes, então UTF-8 funciona).
-- **Plano B:** `cli.py` funciona sem a interface.
 
----
-
-## 8. Ordem sugerida de implementação
-
-1. `bitio.py` → `TestBitIO`
-2. `huffman.py` → `TestHuffman`
-3. `formato.py` → `TestFormato`
-4. `compactador.py` (primeiro com `usar_lz77=False`) → a interface já funciona
-5. `metricas.py` → aba de taxa completa
-6. `lz77.py` → `TestLZ77` e depois `TestPipeline`
-
-A interface abre desde o início: enquanto uma função retornar `None`, ela avisa qual está faltando.

@@ -10,8 +10,8 @@ Compressão::
 
 Descompressão: o caminho inverso, a partir do cabeçalho.
 
-A interface (``app.py``) e a linha de comando (``cli.py``) só conversam com
-este módulo, nunca diretamente com os outros.
+A interface (``app.py``) só conversa com este módulo para compactar e
+descompactar, nunca diretamente com os outros.
 """
 
 from __future__ import annotations

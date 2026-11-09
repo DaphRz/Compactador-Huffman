@@ -303,7 +303,7 @@ with aba_comp:
         with st.expander("Prévia do texto", expanded=False):
             mostrar_previa(texto_original, "previa_original")
 
-        if st.button("🗜️ Compactar", type="primary", use_container_width=True):
+        if st.button("🗜️ Compactar", type="primary", width="stretch"):
 
             with st.spinner("Compactando..."):
 
@@ -368,7 +368,7 @@ with aba_comp:
             data=resultado_atual.arquivo,
             file_name=st.session_state.nome_huf or "arquivo.huf",
             mime="application/octet-stream",
-            use_container_width=True,
+            width="stretch",
         )
 
         st.caption("Veja o conteúdo do arquivo, a árvore e a taxa nas próximas abas.")
@@ -419,7 +419,7 @@ with aba_desc:
     if st.button(
         "📂 Descompactar",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=huf_para_abrir is None,
     ):
         with st.spinner("Descompactando..."):
@@ -480,7 +480,7 @@ with aba_desc:
             data=restaurado_atual.dados,
             file_name=f"{base}_restaurado.txt",
             mime="text/plain",
-            use_container_width=True,
+            width="stretch",
         )
 
 # ── 3. Arquivo compactado ────────────────────────────────────────────────────
@@ -534,7 +534,7 @@ with aba_arq:
                 {"Campo": "Payload", "Offset": inicio_payload, "Bytes": len(payload), "Valor": "bits do Huffman"},
             ]
 
-            st.dataframe(pd.DataFrame(campos), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(campos), hide_index=True, width="stretch")
 
             v_hex, v_bits, v_tabela, v_exemplo = st.tabs(
                 ["Hexadecimal", "Bits do payload", "Tabela de comprimentos", "Do texto aos bits"]
@@ -570,7 +570,7 @@ with aba_arq:
                     for s, c in sorted(cab.comprimentos.items(), key=lambda kv: (kv[1], kv[0]))
                 ]
 
-                st.dataframe(pd.DataFrame(linhas_tab), hide_index=True, use_container_width=True)
+                st.dataframe(pd.DataFrame(linhas_tab), hide_index=True, width="stretch")
 
             with v_exemplo:
                 res: Optional[ResultadoCompressao] = st.session_state.resultado
@@ -590,7 +590,7 @@ with aba_arq:
 
                     exemplo = codificar_trecho_para_exibicao(original_bytes, res.codigos, limite=24)
 
-                    st.dataframe(pd.DataFrame(exemplo).T, use_container_width=True)
+                    st.dataframe(pd.DataFrame(exemplo).T, width="stretch")
                     
                     bits_concat = "".join(linha["Código"] for linha in exemplo)
 
@@ -640,7 +640,7 @@ with aba_arvore:
                     "Ajuste na barra lateral (0 = todas)."
                 )
 
-            st.graphviz_chart(dot, use_container_width=True)
+            st.graphviz_chart(dot, width="stretch")
             st.caption(
                 "Círculos: nós internos (soma das frequências). Caixas: folhas com "
                 "símbolo, frequência (f) e código. Esquerda = 0, direita = 1."
@@ -652,7 +652,7 @@ with aba_arvore:
 
         tabela = tabela_de_codigos(res_arv.frequencias, res_arv.codigos)
 
-        st.dataframe(pd.DataFrame(tabela), hide_index=True, use_container_width=True)
+        st.dataframe(pd.DataFrame(tabela), hide_index=True, width="stretch")
 
 # ── 5. Taxa de compactação ───────────────────────────────────────────────────
 
@@ -712,7 +712,7 @@ with aba_taxa:
 
         df_barras = pd.DataFrame({"Etapa": rotulos, "Bytes": list(barras.values())})
 
-        st.bar_chart(df_barras, x="Etapa", y="Bytes", use_container_width=True)
+        st.bar_chart(df_barras, x="Etapa", y="Bytes", width="stretch")
 
         st.markdown("#### Como ler esses números")
 
@@ -763,7 +763,7 @@ with aba_cmp:
             "confere se a ida e volta devolve o texto original."
         )
 
-        if st.button("⚖️ Rodar comparação", type="primary", use_container_width=True):
+        if st.button("⚖️ Rodar comparação", type="primary", width="stretch"):
 
             linhas_cmp: list[dict[str, Any]] = []
 
@@ -798,7 +798,7 @@ with aba_cmp:
             st.dataframe(
                 df_cmp,
                 hide_index=True,
-                use_container_width=True,
+                width="stretch",
                 column_config={
                     "Taxa": st.column_config.NumberColumn(format="%.3f"),
                     "Redução (%)": st.column_config.NumberColumn(format="%.1f"),
@@ -812,7 +812,7 @@ with aba_cmp:
                     "Bytes": [len(original_cmp)] + [linha["Tamanho (bytes)"] for linha in linhas_salvas],
                 }
             )
-            st.bar_chart(grafico, x="Modo", y="Bytes", use_container_width=True)
+            st.bar_chart(grafico, x="Modo", y="Bytes", width="stretch")
             if len(linhas_salvas) == 2:
                 a, b = linhas_salvas
                 ganho = a["Tamanho (bytes)"] - b["Tamanho (bytes)"]
