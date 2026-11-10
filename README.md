@@ -4,8 +4,6 @@ Compactador de arquivos de texto com **Huffman Canônico**, combinado com **LZ77
 
 ## Como executar
 
-Requisito: **Python 3.11 ou mais recente**.
-
 ### Windows 
 
 
